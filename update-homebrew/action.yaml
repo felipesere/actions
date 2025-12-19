@@ -9,6 +9,9 @@ inputs:
   application:
     description: The name of application we are releasing
     required: true
+  formula:
+    description: Ruby-class name to use. Should match application. Sad that we can't do "inputs.application.titlecase"
+    required: true
   homebrew_tap:
     description: The homebrew tap repository to publish to
     required: true
@@ -64,10 +67,8 @@ runs:
         cd homebrew-tap
         BRANCH_NAME=update-${{inputs.application}}-v${{ steps.version.outputs.version }}
         git switch -c $BRANCH_NAME
-        APPLICATION=${{inputs.application}}
-        FORMULA_NAME="${APPLICATION@L}"
         cat > Formula/${{inputs.application}}.rb << EOF
-        class ${FORMULA_NAME} < Formula
+        class ${{ inputs.formula }} < Formula
           desc "Fancy YAML diffing"
           homepage "https://github.com/${{inputs.owner}}/${{inputs.application}}"
           version "${{ steps.version.outputs.version }}"
