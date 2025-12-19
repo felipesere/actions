@@ -44,6 +44,20 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.application_token }}
 
+    - name: Get repository details
+      id: repoDetails
+      shell: bash
+      run: |
+        DESCRIPTION=$(gh repo view --json description --jq .description)
+        echo "description=${DESCRIPTION}" >> $GITHUB_OUTPUT
+        echo "The description is \"$DESCRIPTION\"" >> $GITHUB_STEP_SUMMARY
+
+        LICENSE=$(gh repo view --json licenseInfo --jq .licenseInfo.key)
+        echo "license=${LICENSE}" >> $GITHUB_OUTPUT
+        echo "The lincese is \"$LICENSE\"" >> $GITHUB_STEP_SUMMARY
+      env:
+        GH_TOKEN: ${{ inputs.application_token }}
+
     - name: Calculate SHA256 checksums
       id: checksums
       shell: bash
@@ -69,10 +83,10 @@ runs:
         git switch -c $BRANCH_NAME
         cat > Formula/${{inputs.application}}.rb << EOF
         class ${{ inputs.formula }} < Formula
-          desc "Fancy YAML diffing"
+          desc "${{ steps.repoDetails.outputs.description }}"
           homepage "https://github.com/${{inputs.owner}}/${{inputs.application}}"
           version "${{ steps.version.outputs.version }}"
-          license "MIT"
+          license "${{ steps.repoDetails.outputs.license }}"
 
           on_macos do
             if Hardware::CPU.arm?
