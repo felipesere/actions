@@ -9,6 +9,9 @@ inputs:
   application:
     description: The name of application we are releasing
     required: true
+  gh_token:
+    description: Token with access to {owner}/{application} to create a release
+    required: true
 
 runs:
   using: composite
@@ -22,6 +25,7 @@ runs:
         path: artifacts
 
     - name: Generate checksums
+      shell: bash
       run: |
         cd artifacts
         for dir in */; do
@@ -63,4 +67,4 @@ runs:
         draft: false
         prerelease: ${{ contains(github.ref, 'pre') || contains(github.ref, 'rc') || contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ inputs.gh_token }}

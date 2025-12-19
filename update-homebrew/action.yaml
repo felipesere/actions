@@ -12,6 +12,9 @@ inputs:
   homebrew_tap:
     description: The homebrew tap repository to publish to
     required: true
+  application_token:
+    description: The token used to access the application repo
+    required: true
   homebrew_tap_token:
     description: Token used to create a PR for homebrew_tap
     required: true
@@ -21,10 +24,12 @@ runs:
   steps:
     - name: Get release version
       id: version
+      shell: bash
       run: |
         echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
 
     - name: Download release assets
+      shell: bash
       run: |
         mkdir -p downloads
         cd downloads
@@ -34,10 +39,11 @@ runs:
           --pattern "*.tar.gz" \
           --repo ${{ github.repository }}
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ inputs.application_token }}
 
     - name: Calculate SHA256 checksums
       id: checksums
+      shell: bash
       run: |
         cd downloads
 
@@ -52,8 +58,9 @@ runs:
         echo "linux_x86_sha=$linux_x86_sha" >> $GITHUB_OUTPUT
 
     - name: Update formula
+      shell: bash
       run: |
-        git clone https://${{ secrets.COMMITTER_TOKEN }}@github.com/${{inputs.homebrew_tap}}.git
+        git clone https://${{ inputs.homebrew_tap_token }}@github.com/${{inputs.homebrew_tap}}.git
         cd homebrew-tap
         BRANCH_NAME=update-${{inputs.application}}-v${{ steps.version.outputs.version }}
         git switch -c $BRANCH_NAME
