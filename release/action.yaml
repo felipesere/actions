@@ -1,0 +1,66 @@
+name: Create GitHub Release
+description: Creates a release based on compiled binaries
+author: Felipe Sere <github@felipesere.com>
+
+inputs:
+  owner:
+    description: The owner of the repo that will have a release created
+    required: true
+  application:
+    description: The name of application we are releasing
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Generate checksums
+      run: |
+        cd artifacts
+        for dir in */; do
+          cd "$dir"
+          sha256sum *.tar.gz >> ../../SHA256SUMS
+          cd ..
+        done
+        cd ..
+        cat SHA256SUMS
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          artifacts/*/*.tar.gz
+          SHA256SUMS
+        body: |
+          ## Installation
+
+          ### Homebrew (macOS and Linux)
+          ```bash
+          brew install ${{inputs.owner}}/tap/${{inputs.application}}
+          ```
+
+          ### Manual Installation
+          Download the appropriate binary for your system:
+          - **macOS (Apple Silicon)**: ${{inputs.application}}-macos-aarch64.tar.gz
+          - **macOS (Intel)**: ${{inputs.application}}-macos-x86_64.tar.gz
+          - **Linux (x86_64)**: ${{inputs.application}}-linux-x86_64.tar.gz
+          - **Linux (ARM64)**: ${{inputs.application}}-linux-aarch64.tar.gz
+
+          Extract and install:
+          ```bash
+          tar xzf ${{inputs.application}}-*.tar.gz
+          sudo mv ${{inputs.application}} /usr/local/bin/
+          ```
+
+          Verify checksums with SHA256SUMS file.
+        draft: false
+        prerelease: ${{ contains(github.ref, 'pre') || contains(github.ref, 'rc') || contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

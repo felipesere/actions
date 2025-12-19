@@ -1,0 +1,108 @@
+name: Create Homebrew PR
+description: Creates a PR to update the Formula in a Homebrew tap
+author: Felipe Sere <github@felipesere.com>
+
+inputs:
+  owner:
+    description: The owner of the Github repo.
+    required: true
+  application:
+    description: The name of application we are releasing
+    required: true
+  homebrew_tap:
+    description: The homebrew tap repository to publish to
+    required: true
+  homebrew_tap_token:
+    description: Token used to create a PR for homebrew_tap
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Get release version
+      id: version
+      run: |
+        echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+    - name: Download release assets
+      run: |
+        mkdir -p downloads
+        cd downloads
+
+        # Download all tarballs
+        gh release download "v${{ steps.version.outputs.version }}" \
+          --pattern "*.tar.gz" \
+          --repo ${{ github.repository }}
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Calculate SHA256 checksums
+      id: checksums
+      run: |
+        cd downloads
+
+        macos_arm64_sha=$(sha256sum ${{inputs.application}}-macos-aarch64.tar.gz | awk '{print $1}')
+        macos_x86_sha=$(sha256sum ${{inputs.application}}-macos-x86_64.tar.gz | awk '{print $1}')
+        linux_arm64_sha=$(sha256sum ${{inputs.application}}-linux-aarch64.tar.gz | awk '{print $1}')
+        linux_x86_sha=$(sha256sum ${{inputs.application}}-linux-x86_64.tar.gz | awk '{print $1}')
+
+        echo "macos_arm64_sha=$macos_arm64_sha" >> $GITHUB_OUTPUT
+        echo "macos_x86_sha=$macos_x86_sha" >> $GITHUB_OUTPUT
+        echo "linux_arm64_sha=$linux_arm64_sha" >> $GITHUB_OUTPUT
+        echo "linux_x86_sha=$linux_x86_sha" >> $GITHUB_OUTPUT
+
+    - name: Update formula
+      run: |
+        git clone https://${{ secrets.COMMITTER_TOKEN }}@github.com/${{inputs.homebrew_tap}}.git
+        cd homebrew-tap
+        BRANCH_NAME=update-${{inputs.application}}-v${{ steps.version.outputs.version }}
+        git switch -c $BRANCH_NAME
+        APPLICATION=${{input.application}}
+        FORMULA_NAME="${APPLICATION@L}"
+        cat > Formula/${{inputs.application}}.rb << EOF
+        class ${FORMULA_NAME} < Formula
+          desc "Fancy YAML diffing"
+          homepage "https://github.com/${{inputs.owner}}/${{inputs.application}}"
+          version "${{ steps.version.outputs.version }}"
+          license "MIT"
+
+          on_macos do
+            if Hardware::CPU.arm?
+              url "https://github.com/${{inputs.owner}}/${{inputs.application}}/releases/download/v#{version}/${{inputs.application}}-macos-aarch64.tar.gz"
+              sha256 "${{ steps.checksums.outputs.macos_arm64_sha }}"
+            else
+              url "https://github.com/${{inputs.owner}}/${{inputs.application}}/releases/download/v#{version}/${{inputs.application}}-macos-x86_64.tar.gz"
+              sha256 "${{ steps.checksums.outputs.macos_x86_sha }}"
+            end
+          end
+
+          on_linux do
+            if Hardware::CPU.arm?
+              url "https://github.com/${{inputs.owner}}/${{inputs.application}}/releases/download/v#{version}/${{inputs.application}}-linux-aarch64.tar.gz"
+              sha256 "${{ steps.checksums.outputs.linux_arm64_sha }}"
+            else
+              url "https://github.com/${{inputs.owner}}/${{inputs.application}}/releases/download/v#{version}/${{inputs.application}}-linux-x86_64.tar.gz"
+              sha256 "${{ steps.checksums.outputs.linux_x86_sha }}"
+            end
+          end
+
+          def install
+            bin.install "${{inputs.application}}"
+          end
+
+          test do
+            assert_match version.to_s, shell_output("#{bin}/${{inputs.application}} --version 2>&1", 2)
+          end
+        end
+        EOF
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add Formula/${{inputs.application}}.rb
+        git commit -m "Update formula to version ${{ steps.version.outputs.version }}"
+        git push origin $BRANCH_NAME
+        gh pr create --repo ${{inputs.homebrew_tap}} \
+          --title "Update ${{inputs.application}} to v${{ steps.version.outputs.version }}" \
+          --body "Update of ${{inputs.application}} formula to version ${{ steps.version.outputs.version }}" \
+          --head $BRANCH_NAME
+      env:
+        GH_TOKEN: ${{ inputs.homebrew_tap_token }}
