@@ -64,7 +64,7 @@ runs:
         cd homebrew-tap
         BRANCH_NAME=update-${{inputs.application}}-v${{ steps.version.outputs.version }}
         git switch -c $BRANCH_NAME
-        APPLICATION=${{input.application}}
+        APPLICATION=${{inputs.application}}
         FORMULA_NAME="${APPLICATION@L}"
         cat > Formula/${{inputs.application}}.rb << EOF
         class ${FORMULA_NAME} < Formula
